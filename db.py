@@ -1,9 +1,9 @@
 import psycopg2
-db_host = "scantist-dev.cqy3hiulpjht.ap-southeast-1.rds.amazonaws.com"
+db_host = "XXX"
 db_port = 5432
 db_name = "scantist"
-db_user = "scantist"
-db_password = "scantist"
+db_user = "XXX"
+db_password = "XXX"
 
 class postSql:
     def __init__(self, host_name, port, user, password, db_name):

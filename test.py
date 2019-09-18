@@ -167,13 +167,15 @@ def combine_result(json_data, result):
 
 def match_interest_files(json_data):
     files = json_data["files_of_interest"]
-    db_host = "127.0.0.1"
+    db_host = "XXX"
     db_port = 5432
-    db_name = "scantist"
-    db_user = "user"
-    db_password = "password"
+    db_name = "XXX"
+    db_user = "XXX"
+    db_password = "XXX"
     client = postSql(db_host, db_port, db_user, db_password, db_name)
     result = check_interest_file(files, client)
+    #client.commit()
+    client.close()
     return combine_result(json_data, result)
 
 if __name__ == '__main__':
