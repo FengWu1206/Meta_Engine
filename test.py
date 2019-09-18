@@ -233,7 +233,7 @@ def combine_result(json_data, result):
     json_data["dependencies"] = dependencies
     return json_data
 
-def match_interest_files(json_data):
+def update_dependency_interest_files(json_data):
     """
     :param json_data: data format as ./input/input.json
     :return: data format as .json_result.json
@@ -260,4 +260,4 @@ if __name__ == '__main__':
     files = json_data["files_of_interest"]
     read_file.close()
     with open(os.path.join(os.getcwd(), 'json_result.json'), 'w') as result_write:
-        json.dump(match_interest_files(json_data), result_write)
+        json.dump(update_dependency_interest_files(json_data), result_write)
