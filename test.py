@@ -7,32 +7,55 @@ import traceback
 TIMEOUT_SECONDS = 7200
 
 
-input_json = './input/input.json'
-read_file = open(input_json, "r")
-json_data = json.loads(read_file.read())
-files = json_data["files_of_interest"]
-read_file.close()
 REPLACE_TOKENS = ['####']
 
+# postgresql operation class
 class postSql:
     def __init__(self, host_name, port, user, password, db_name):
+        """
+        :param host_name:
+        :param port:
+        :param user:
+        :param password:
+        :param db_name:
+        """
         self.host_name = host_name
         self.port = port
         self.user = user
         self.password = password
         self.db_name = db_name
         self.client = psycopg2.connect(host=self.host_name, port=self.port, user=self.user, password=self.password, database=self.db_name)
+
     def query(self, sql_command):
+        """
+        :param sql_command: sql operation code
+        :return: all items of sql command. Type: list
+        """
         cursor = self.client.cursor()
         cursor.execute(sql_command)
         records = cursor.fetchall()
         return records
+
     def commit(self):
+        """
+        :return: record operation informaiton
+        """
         self.client.commit()
+
     def close(self):
+        """
+        :return: close the operation cursor
+        """
         self.client.close()
 
+
 def exec_command(cmd, work_dir='.', timeout=TIMEOUT_SECONDS):
+    """
+    :param cmd: exec operation command
+    :param work_dir:
+    :param timeout:
+    :return:
+    """
     p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=work_dir)
     try:
         out, err = p.communicate(timeout=timeout)
@@ -43,6 +66,10 @@ def exec_command(cmd, work_dir='.', timeout=TIMEOUT_SECONDS):
     return {'output': out.strip()}
 
 def clean_version(version_string):
+    """
+    :param version_string: input version
+    :return: cleaned version that delete some special chars, eg. # !
+    """
     if re.match('^(\d+)$', version_string):
         version_string += '.0'
 
@@ -53,7 +80,16 @@ def clean_version(version_string):
     return version_string
 
 def check_information_from_path(file_path):
-    #identify jar from manifest
+    """
+    :param file_path: jar file path
+    :return: information of jar file path by Manifest. type: dict. eg: {
+            "artifact_id": XXX,
+            "version": XXX,
+            "group_id": XXX,
+            "level": 1,
+            "dependencies": []
+        }
+    """
     file_result = {}
     try:
         cmd = f"unzip -q -c %s META-INF/MANIFEST.MF"%(file_path)
@@ -104,6 +140,16 @@ def check_information_from_path(file_path):
         return empty_result(file_result)
 
 def empty_result(file_result):
+    """
+    :param file_result:
+    :return: empty the input dict. eg {
+            "artifact_id": '',
+            "version": '',
+            "group_id": '',
+            "level": 1,
+            "dependencies": []
+        }
+    """
     file_result['group_id'] = ''
     file_result['version'] = ''
     file_result['artifact_id'] = ''
@@ -112,6 +158,23 @@ def empty_result(file_result):
     return file_result
 
 def check_interest_file(files, client):
+    """
+    :param files: information of jar files. eg. {
+            "filename": "foo-version.jar",
+            "filepath": "/Users/zengfeifan/PycharmProjects/CI-analyzer-reference/efda/java/jars/original-jars/lib/com/foodatabase/foo/version/foo-version.jar",
+            "sha1": "FD369423346B2F1525C413E33F8CF95B09C92CBD"
+        }
+    :param client: postgre_sql
+    :return: combine result of DB query and Manifest search.
+             type: list(dict)
+             eg. [{
+      "artifact_id": "jbcrypt",
+      "group_id": "org.mindrot",
+      "version": "0.3m",
+      "level": 1,
+      "dependencies": []
+    }, ...]
+    """
     file_results = []
     for file in files:
         file_result = {}
@@ -159,6 +222,11 @@ def check_interest_file(files, client):
     return file_results
 
 def combine_result(json_data, result):
+    """
+    :param json_data: json
+    :param result: json
+    :return:
+    """
     dependencies = json_data['dependencies']
     for index in result:
         dependencies.append(index)
@@ -166,6 +234,11 @@ def combine_result(json_data, result):
     return json_data
 
 def match_interest_files(json_data):
+    """
+    :param json_data: data format as ./input/input.json
+    :return: data format as .json_result.json
+    you should fill in the information of DB before you call this code.
+    """
     files = json_data["files_of_interest"]
     db_host = "XXX"
     db_port = 5432
@@ -179,7 +252,12 @@ def match_interest_files(json_data):
     return combine_result(json_data, result)
 
 if __name__ == '__main__':
-    #json_result = json.dumps(match_interest_files(json_data))
-    #print(json_result)
+    # the following code are used for debug
+
+    input_json = './input/input.json'
+    read_file = open(input_json, "r")
+    json_data = json.loads(read_file.read())
+    files = json_data["files_of_interest"]
+    read_file.close()
     with open(os.path.join(os.getcwd(), 'json_result.json'), 'w') as result_write:
         json.dump(match_interest_files(json_data), result_write)

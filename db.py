@@ -1,7 +1,7 @@
 import psycopg2
 db_host = "XXX"
 db_port = 5432
-db_name = "scantist"
+db_name = "XXX"
 db_user = "XXX"
 db_password = "XXX"
 
