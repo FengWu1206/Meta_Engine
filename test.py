@@ -4,6 +4,7 @@ import psycopg2
 import re
 import subprocess
 import traceback
+from collections import Counter
 TIMEOUT_SECONDS = 7200
 
 
@@ -177,49 +178,127 @@ def check_interest_file(files, client):
     """
     file_results = []
     for file in files:
-        file_result = {}
         file_name = file['filename']
         file_path = file['filepath']
         sha1 = file['sha1']
-
-        ###########step1: check sha1 in DB, found libname and libversion
-        sql_sha1 = "select * from scantist_library_version_checksum where (checksum_type = 'sha1' and package_type = 'jar' and checksum = '%s');"%(sha1)
-        query_sha1 = client.query(sql_command=sql_sha1)
-        if len(query_sha1) == 0:
-            print("sha1 doesnot matched in DB %s"%sha1)
-            file_results.append(check_information_from_path(file_path))
-            continue
-        else:
-            if len(query_sha1) != 1:
-                print("Error in DB, a lib_version_ID has more than one items! table:%s\tlib_version_id:%s" % (
-                'scantist_library_version_checksum', sha1))
-                file_results.append(empty_result(file_result))
-                continue
-            library_version_id = query_sha1[0][-1]
-            sql_library_version = "select * from scantist_library_version where (id = '%s')" % (library_version_id)
-            query_library_version = client.query(sql_command=sql_library_version)
-            if len(query_library_version) != 1:
-                print("Error in DB, a lib_version_ID has more than one items! table:%s\tlib_version_id:%s" % (
-                'scantist_library_version', library_version_id))
-                file_results.append(empty_result(file_result))
-                continue
-            lib_id = query_library_version[0][7]
-            version_number = query_library_version[0][3]
-            sql_library = "select * from scantist_library where (id = '%s')" % (lib_id)
-            query_lib = client.query(sql_library)
-            if len(query_library_version) != 1:
-                print(
-                    "Error in DB, a lib_ID has more than one items! table:%s\tlib_id:%s" % ('scantist_library', lib_id))
-                file_results.append(empty_result(file_result))
-                continue
-            vendor = query_lib[0][5]
-            file_result['group_id'] = vendor
-            file_result['version'] = version_number
-            file_result['artifact_id'] = lib_id
-            file_result['level'] = 1
-            file_result['dependencies'] = []
-        file_results.append(file_result)
+        if file_name.endswith('.jar'):
+            check_jar_library_version(client, file_results, file_path, sha1)
+        elif file_name.endswith('.js'):
+            check_js_library_Version(file_results, file_path, file_name)
     return file_results
+
+def check_jar_library_version(client, file_results, file_path, sha1):
+    """
+    :param client: jar DB
+    :param file_results: list(dict)
+    :param file_path: jar file path update by user
+    :param sha1: maven sha1 of jar
+    :return:list(dict)
+    """
+    file_result = {}
+    ###########step1: check sha1 in DB, found libname and libversion
+    sql_sha1 = "select * from scantist_library_version_checksum where (checksum_type = 'sha1' and package_type = 'jar' and checksum = '%s');" % (
+        sha1)
+    query_sha1 = client.query(sql_command=sql_sha1)
+    if len(query_sha1) == 0:
+        print("sha1 doesnot matched in DB %s" % sha1)
+        file_results.append(check_information_from_path(file_path))
+        return 0
+    else:
+        if len(query_sha1) != 1:
+            print("Error in DB, a lib_version_ID has more than one items! table:%s\tlib_version_id:%s" % (
+                'scantist_library_version_checksum', sha1))
+            file_results.append(empty_result(file_result))
+            return 0
+        library_version_id = query_sha1[0][-1]
+        sql_library_version = "select * from scantist_library_version where (id = '%s')" % (library_version_id)
+        query_library_version = client.query(sql_command=sql_library_version)
+        if len(query_library_version) != 1:
+            print("Error in DB, a lib_version_ID has more than one items! table:%s\tlib_version_id:%s" % (
+                'scantist_library_version', library_version_id))
+            file_results.append(empty_result(file_result))
+            return 0
+        lib_id = query_library_version[0][7]
+        version_number = query_library_version[0][3]
+        sql_library = "select * from scantist_library where (id = '%s')" % (lib_id)
+        query_lib = client.query(sql_library)
+        if len(query_library_version) != 1:
+            print(
+                "Error in DB, a lib_ID has more than one items! table:%s\tlib_id:%s" % ('scantist_library', lib_id))
+            file_results.append(empty_result(file_result))
+            return 0
+        vendor = query_lib[0][5]
+        file_result['group_id'] = vendor
+        file_result['version'] = version_number
+        file_result['artifact_id'] = lib_id
+        file_result['level'] = 1
+        file_result['dependencies'] = []
+        file_results.append(file_result)
+        return 0
+
+
+def check_js_library_Version(file_results, file_path, file_name):
+
+    file_result = {}
+    if len(file_name.split('-'))>2:
+        possible = True
+        print("Effective JS file name")
+        version_possible = file_name.split('-')[-1]
+        for char in version_possible.replace("v .", ""):
+            if ord(char) >= 48 and ord(char) <= 57:
+                continue
+            else:
+                possible = False
+        if possible is True:
+            file_result["version"] = version_possible.replace("v", "")
+            file_result["level"] = 1
+            file_result["artifact_id"] = file_name.replace(version_possible, "")
+            file_result['dependencies'] = []
+            file_result['group_id'] = ''
+            file_results.append(file_result)
+            return 0
+        else:
+            file_results.append(empty_result(file_result))
+            return 0
+    else:
+        with open(file_path, 'r') as file_read:
+            lines = file_read.readlines()
+            lines.remove('\n')
+            lines.remove(' \n')
+            if '/*' not in lines[0]:
+                file_results.append(empty_result(file_result))
+                return 0
+            else:
+                count = 0
+                for line in lines:
+                    count+=1
+                    if '*/' in line:
+                        break
+                if count == 0 or count == len(lines):
+                    file_results.append(empty_result(file_result))
+                    return 0
+                else:
+                    words = []
+                    for line in lines[0:count]:
+                        [words.append(element.lower()) for element in line.split(' ')]
+                    for word in words:
+                        possible = True
+                        for char in word:
+                            if (ord(char)>=48 and ord(char)<=57) or ord(char) == 46 or ord(char) == 118:
+                                continue
+                            else:
+                                possible = False
+                        if possible is True:
+                            file_result['version'] = word.replace("v", "")
+                            file_result['artifact_id'] = Counter(words).most_common(1)
+                            file_result['group_id'] = ''
+                            file_result['level'] = 1
+                            file_result['dependencies'] = []
+                            file_results.append(file_result)
+                            return 0
+                    file_results.append(empty_result(file_result))
+                    return 0
+
 
 def combine_result(json_data, result):
     """
@@ -240,11 +319,11 @@ def update_dependency_interest_files(json_data):
     you should fill in the information of DB before you call this code.
     """
     files = json_data["files_of_interest"]
-    db_host = "XXX"
+    db_host = "scantist-dev.cqy3hiulpjht.ap-southeast-1.rds.amazonaws.com"
     db_port = 5432
-    db_name = "XXX"
-    db_user = "XXX"
-    db_password = "XXX"
+    db_name = "scantist"
+    db_user = "scantist"
+    db_password = "scantist"
     client = postSql(db_host, db_port, db_user, db_password, db_name)
     result = check_interest_file(files, client)
     #client.commit()
