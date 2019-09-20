@@ -185,6 +185,7 @@ def check_interest_file(files, client):
             check_jar_library_version(client, file_results, file_path, sha1)
         elif file_name.endswith('.js'):
             check_js_library_Version(file_results, file_path, file_name)
+    print(file_results)
     return file_results
 
 def check_jar_library_version(client, file_results, file_path, sha1):
@@ -263,34 +264,55 @@ def check_js_library_Version(file_results, file_path, file_name):
     else:
         with open(file_path, 'r') as file_read:
             lines = file_read.readlines()
-            lines.remove('\n')
-            lines.remove(' \n')
-            if '/*' not in lines[0]:
+            if '\n' in lines:
+                lines.remove('\n')
+            if ' \n' in lines:
+                lines.remove('\n')
+            if '/*' not in lines[0] and '//' not in lines[0]:
                 file_results.append(empty_result(file_result))
                 return 0
             else:
                 count = 0
-                for line in lines:
-                    count+=1
-                    if '*/' in line:
-                        break
+                if '/*' in lines[0]:
+                    for line in lines:
+                        count+=1
+                        if '*/' in line:
+                            break
+                else:
+                    for line in lines:
+                        count+=1
+                        if not line.startswith('//'):
+                            break
                 if count == 0 or count == len(lines):
                     file_results.append(empty_result(file_result))
                     return 0
                 else:
                     words = []
                     for line in lines[0:count]:
+                        line = line.replace("\n", "")
                         [words.append(element.lower()) for element in line.split(' ')]
+                    if '' in words:
+                        words.remove('')
                     for word in words:
                         possible = True
                         for char in word:
-                            if (ord(char)>=48 and ord(char)<=57) or ord(char) == 46 or ord(char) == 118:
+                            if (ord(char) >= 48 and ord(char) <= 57) or ord(char) == 46 or ord(char) == 118:
                                 continue
                             else:
                                 possible = False
                         if possible is True:
+                            possible_library = Counter(words).most_common(2)
+                            library_name = ''
+                            library_index = -1
+                            if possible_library[0][1] == possible_library[1][1]:
+                                library_index = words.index(word) - 1
+                            else:
+                                library_name = possible_library[0][0] if possible_library[0][1] > possible_library[1][1] else possible_library[1][0]
+                            if library_index >= 0:
+                                library_name = words[library_index]
+
                             file_result['version'] = word.replace("v", "")
-                            file_result['artifact_id'] = Counter(words).most_common(1)
+                            file_result['artifact_id'] = library_name
                             file_result['group_id'] = ''
                             file_result['level'] = 1
                             file_result['dependencies'] = []
@@ -322,8 +344,8 @@ def update_dependency_interest_files(json_data):
     db_host = "scantist-dev.cqy3hiulpjht.ap-southeast-1.rds.amazonaws.com"
     db_port = 5432
     db_name = "scantist"
-    db_user = "XXX"
-    db_password = "XXX"
+    db_user = "scantist"
+    db_password = "scantist"
     client = postSql(db_host, db_port, db_user, db_password, db_name)
     result = check_interest_file(files, client)
     #client.commit()
