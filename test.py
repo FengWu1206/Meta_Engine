@@ -341,11 +341,11 @@ def update_dependency_interest_files(json_data):
     you should fill in the information of DB before you call this code.
     """
     files = json_data["files_of_interest"]
-    db_host = "scantist-dev.cqy3hiulpjht.ap-southeast-1.rds.amazonaws.com"
+    db_host = "scantist-dev.XXX"
     db_port = 5432
-    db_name = "scantist"
-    db_user = "scantist"
-    db_password = "scantist"
+    db_name = "XXX"
+    db_user = "XXX"
+    db_password = "XXX"
     client = postSql(db_host, db_port, db_user, db_password, db_name)
     result = check_interest_file(files, client)
     #client.commit()
